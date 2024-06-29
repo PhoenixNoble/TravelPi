@@ -1,0 +1,92 @@
+Configure your Raspberry Pi
+To begin, follow the Getting Started documentation to set up your Raspberry Pi. For your operating system, choose Raspberry Pi OS Lite (32-bit) 
+to run headless (without a mouse and keyboard). - doesnt matter can run full OS too
+
+During the OS customisation stage, edit settings as follows:
+Enter a hostname of your choice (we suggest pi-hotspot for this tutorial). - TravelPi
+Enter a username and password; you’ll need these later to authenticate.
+Check the box next to Configure wireless LAN so your Pi can automatically connect to Wi-Fi.
+Enter your network SSID (name) and password; you can find these in your Wi-Fi settings or on a sticker on your router.
+In the Services tab, check the box next to Enable SSH so we can connect to the Pi without a mouse and keyboard.
+Enable password authentication for SSH connections.
+
+Connect via SSH
+  $ ssh <username>@TravelPi.local
+
+#######################################################################################################################################
+                                                      Setup Hotspot
+#######################################################################################################################################
+
+Find your USB Wi-Fi adapter
+  $ nmcli device
+
+Create hotspot network
+  $ sudo nmcli device wifi hotspot ssid <hotspot name> password <hotspot password> ifname wlan0
+wlan0 option at the end of this command specifies that the hotspot should use the built-in Wi-Fi module, which supports the AP (Access Point)
+  
+  $ nmcli connection
+NAME       UUID                                  TYPE      DEVICE
+Hotspot    69d77a03-1cd1-4ec7-bd78-2eb6cd5f1386  wifi      wlan0
+lo         f0209dd9-8416-40a0-971d-860d3ff3501b  loopback  lo
+Ethernet   4c8098c7-9f7d-4e3e-a27a-70d54235ec9a  ethernet  --
+Example 1  f0c4fbcc-ac88-4791-98c2-e75685c70e9f  wifi      --
+Example 2  9c6098a7-ac88-40a0-5ac2-b75695c70e9e  wifi      --
+
+Configure hotspot network
+  $ nmcli connection show <hotspot UUID>
+  $ sudo nmcli connection modify <hotspot UUID> connection.autoconnect yes connection.autoconnect-priority 100
+
+Configure connection portal
+  $ sudo apt update
+  $ sudo apt full-upgrade
+  $ sudo apt install python3-flask
+  $ mkdir ~/wifi-portal
+  $ cd ~/wifi-portal
+  $ sudo nano app.py
+
+Copy the code from app.py in this project into the new file
+Press Ctrl+X, then Y, and finally Enter
+
+  $ crontab -e
+
+Add the following line to the bottom of the file replacing <username>
+  @reboot sudo python3 /home/<username>/wifi-portal/app.py
+
+finally reboot the system
+  $ sudo reboot
+
+Use the hotspot
+  Connect your usual computer to the hotspot Wi-Fi connection
+  Visit http://TravelPi.local
+  Select a Wi-Fi network and enter a password if necessary.
+
+If you need to restart the network you can use
+  $ systemctl restart NetworkManager
+
+#######################################################################################################################################
+                                                      Install Jellyfin
+#######################################################################################################################################
+
+Lets Update everything 
+  $ sudo apt update
+  $ sudo apt full-upgrade
+
+Install some packages to access the Jellyfin package repository
+  $ sudo apt install apt-transport-https lsb-release
+
+Import GPG key
+  $ curl https://repo.jellyfin.org/debian/jellyfin_team.gpg.key | gpg --dearmor | sudo tee /usr/share/keyrings/jellyfin-archive-keyring.gpg >/dev/null
+
+Add Jellyfin Repo
+  $ echo "deb [signed-by=/usr/share/keyrings/jellyfin-archive-keyring.gpg arch=$( dpkg --print-architecture )] https://repo.jellyfin.org/debian $( lsb_release -c -s ) main" | sudo tee /etc/apt/sources.list.d/jellyfin.list
+
+Update package list again
+  $ sudo apt update
+
+Install Jellyfin
+  $ sudo apt install jellyfin
+
+Once install is complete go to
+  http://TravelPi.local:8096
+
+Now run through Jellyfin First Setup Experience
