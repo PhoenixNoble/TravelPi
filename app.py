@@ -5,13 +5,44 @@ app = Flask(__name__)
 
 wifi_device = "wlan1"
 
-@app.route('/')
-def index():
+def GetAvailableNetworks():
+    html = ""
     try:
         result = subprocess.check_output(["nmcli", "--colors", "no", "-m", "multiline", "--get-value", "SSID", "dev", "wifi", "list", "ifname", wifi_device])
         ssids_list = result.decode().split('\n')
+
+        html += f"""
+            <h1>Wifi Control</h1>
+            <form action="/submit" method="post">
+                <label for="ssid">Choose a WiFi network:</label>
+                <select name="ssid" id="ssid">
+            """
+        for ssid in ssids_list:
+            only_ssid = ssid.removeprefix("SSID:")
+            if len(only_ssid) > 0:
+                dropdowndisplay += f"""
+                <option value="{only_ssid}">{only_ssid}</option>
+                """
+        html += f"""
+                </select>
+                <p/>
+                <label for="password">Password: <input type="password" name="password"/></label>
+                <p/>
+                <input type="submit" value="Connect">
+            </form>
+            """
+            
     except subprocess.CalledProcessError as e:
-        ssids_list = ["No Wifi Access Point" , str(e.returncode)]
+        html += f"""
+            <h1>No Wifi Device Found</h1>
+            """
+
+    return html
+    
+
+
+@app.route('/')
+def index():
     dropdowndisplay = f"""
         <!DOCTYPE html>
         <html>
@@ -19,24 +50,10 @@ def index():
             <title>Wifi Control</title>
         </head>
         <body>
-            <h1>Wifi Control</h1>
-            <form action="/submit" method="post">
-                <label for="ssid">Choose a WiFi network:</label>
-                <select name="ssid" id="ssid">
         """
-    for ssid in ssids_list:
-        only_ssid = ssid.removeprefix("SSID:")
-        if len(only_ssid) > 0:
-            dropdowndisplay += f"""
-                    <option value="{only_ssid}">{only_ssid}</option>
-            """
+    dropdowndisplay += GetAvailableNetworks()
+    
     dropdowndisplay += f"""
-                </select>
-                <p/>
-                <label for="password">Password: <input type="password" name="password"/></label>
-                <p/>
-                <input type="submit" value="Connect">
-            </form>
             <form action="/changebssid" method="post">
                 <p/>
                 <label for="bssid">New BSSID: <input type="password" name="bssid"/></label>
