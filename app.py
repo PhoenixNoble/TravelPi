@@ -1,4 +1,4 @@
-from flask import Flask,request, render_template_string
+from flask import Flask,request, render_template_string, redirect
 import subprocess
 
 app = Flask(__name__)
@@ -23,7 +23,6 @@ def GetAvailableNetworks():
                 html += f"""
                 <option value="{only_ssid}">{only_ssid}</option>
                 """
-        # <input type="password" name="password"/>
         html += f"""
                 </select>
                 <p/>
@@ -40,13 +39,64 @@ def GetAvailableNetworks():
 
     return html
 
+def GetVPNLocations():
+    html = ""
+    try:
+        result = subprocess.check_output(["ls", "/etc/openvpn"])
+        vpnLocations = result.decode().split('\n')
+
+        html += f"""
+            <form action="/ConnectToVPN" method="post">
+                <label for="location">Choose a VPN location:</label>
+                <select name="VPNLocation" id="VPNLocation">
+            """
+        html += f"""
+            <option value="NONE">NONE</option>
+            """
+        for location in vpnLocations:
+            if len(location) > 0 and ".ovpn" in location:
+                html += f"""
+                <option value="{location}">{location}</option>
+                """
+        html += f"""
+            </select>
+            <p/>
+            <input type="submit" value="Connect">
+            <p/>
+            </form>
+            """
+    except subprocess.CalledProcessError as e:
+        html += f"""
+            <h1>No VPN Locations Found</h1>
+            <p/>
+            """
+    return html
+
+@app.route('/data_wifistatus')
+def data_wifistatus():
+    wifi_status = subprocess.check_output(["nmcli", "dev", "wifi", "list"])
+    wifi_status = wifi_status.decode()
+    tokens = wifi_status.split("\n")
+    result = ""
+    for line in tokens:
+        if '*' in line:
+            result += "<p/>"
+            result += line
+    return result
+
 @app.route('/data_temperature')
-def data():
+def data_temperature():
     temp = subprocess.check_output(["vcgencmd", "measure_temp"])
     temp = temp.decode().strip('\n')
     return temp
 
-@app.route('/pistats')
+@app.route('/data_ip_address')
+def data_ip_address():
+    ipAddress = subprocess.check_output(["curl", "ifconfig.me"])#
+    ipAddress = ipAddress.decode().strip('\n')
+    return "IP: " + ipAddress
+
+@app.route('/pistats', methods=['GET', 'POST'])
 def pistats(): 
     arm_mem = subprocess.check_output(["vcgencmd", "get_mem", "arm"])
     arm_mem = arm_mem.decode().strip('\n')
@@ -59,6 +109,7 @@ def pistats():
     {gpu_mem}
     <p/>
     """
+
     html += render_template_string("""
     <span id="time"><span>
     <script type="text/javascript">
@@ -68,9 +119,40 @@ def pistats():
     .then(response => response.text())
     .then(text => (time_span.innerHTML = text));  // update page with new data
     }
-    setInterval(updater, 250);  // run `updater()` every 1000ms (1s)
+    setInterval(updater, 5000);  // run `updater()` every 1000ms (1s)
     </script>
+    <p/>
     """)
+
+    html += render_template_string("""
+    <span id="wifi"><span>
+    <script type="text/javascript">
+    var wifi_data = document.getElementById("wifi");
+    function updater() {
+    fetch('/data_wifistatus')
+    .then(response => response.text())
+    .then(text => (wifi_data.innerHTML = text));  // update page with new data
+    }
+    setInterval(updater, 10000);  // run `updater()` every 1000ms (1s)
+    </script>
+    <p/>
+    """)
+
+    html += render_template_string("""
+    <span id="ip_address"><span>
+    <script type="text/javascript">
+    var address = document.getElementById("ip_address");
+    function updater() {
+    fetch('/data_ip_address')
+    .then(response => response.text())
+    .then(text => (address.innerHTML = text));  // update page with new data
+    }
+    setInterval(updater, 10000);  // run `updater()` every 1000ms (1s)
+    </script>
+    <p/>
+    """)
+
+    html += GetVPNLocations()
     return html
 
 @app.route('/')
@@ -108,6 +190,20 @@ def index():
     </html>
     """
     return dropdowndisplay
+
+@app.route('/ConnectToVPN',methods=['POST'])
+def ConnectToVPN():
+    location = request.form['VPNLocation']
+    if request.method == 'POST':
+        if location != 'NONE':
+            ovpnFile = "/etc/openvpn/{}".format(location)
+            connection_command = ['sudo', '-b', 'openvpn', '--config', ovpnFile, '--auth-user-pass', '/etc/openvpn/con.txt']
+        else:
+            connection_command = ['sudo', '-b', 'killall', 'openvpn']
+
+    result = subprocess.Popen(connection_command)
+
+    return redirect(("/pistats"), code=307)
 
 @app.route('/shutdown',methods=['POST'])
 def shutdown():
